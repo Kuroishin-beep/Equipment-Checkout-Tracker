@@ -15,7 +15,7 @@ what I changed or rejected and why.
 
 | Tool | Used for |
 |------|----------|
-| Claude Code (Opus 5) | Architecture planning, scaffolding, code review, this log |
+| Claude Code (Opus 5) | Architecture planning, written step-by-step instructions, code review, drafting this log |
 | Neon SQL Editor | Running the schema and inspecting rows directly |
 | Chrome DevTools (device toolbar, 375px) | Responsive verification |
 | `curl` | Testing the REST endpoints before any UI existed |
@@ -81,15 +81,156 @@ registry instead of taken from the model's memory — Next.js 16.3.0, Tailwind 4
 
 ---
 
-<!--
-Template for each following phase — keep entries short and specific.
+## 2026-08-14 — Phase 1 · Scaffold and deploy
 
-## 2026-XX-XX — Phase N · <name>
+**Goal:** Get an empty but real Next.js app deployed to Vercel from GitHub *before* writing a
+single feature, so that deployment stops being a submission-day risk. Straight from the exam's
+own tips: "Deploy to Vercel first, even with just the default template."
 
-**What I was doing:**
-**What I asked:**
-**What came back:**
-**What I changed by hand and why:**
-**Bugs hit and how I fixed them:**
-**Commit:** `<message>`
--->
+**Tool:** Claude Code (Opus 5) — for an environment audit and written instructions **only**.
+I ran every command myself. Nothing in commit `4eacfe6` was authored by the AI: the commit is
+`create-next-app` output plus my own git work.
+
+**Prompt I gave:**
+> GIVe me the isntructions on how to do the phase 1 on my own and explain each step of it
+
+**What came back:** An 11-step guide, a table explaining every `create-next-app` flag, a
+done-checklist and a troubleshooting table. Three things it checked on my actual machine
+rather than assumed, each of which changed the instructions:
+
+- Node v22.21.1, npm 10.9.4, git 2.46.0 — all fine for Next 16, which needs Node ≥ 20.9
+- `gh` CLI is **not** installed here → the GitHub and Vercel steps had to be browser-based
+- `origin` was **already** pointed at `github.com/Kuroishin-beep/Equipment-Checkout-Tracker`
+  and the repo was empty → no repo creation and no `git remote add` needed
+
+It also test-ran `create-next-app` against a throwaway folder containing dummy `PLAN.md` and
+`DEVLOG.md` files, which proved in advance that the scaffold would refuse to run here:
+
+> The directory contains files that could conflict: DEVLOG.md, PLAN.md
+
+`create-next-app` only tolerates a known-safe list of pre-existing files (`.git`, `.gitignore`,
+`README.md`, `LICENSE`…) and my two planning docs are not on it. That turned a blocker I would
+otherwise have hit mid-command into two planned steps.
+
+**What I did by hand — all of it:**
+
+1. Staged and committed the planning docs → `7d32b2d` (00:52). Doing this *first* meant the
+   docs were recoverable via `git checkout` before I moved them anywhere.
+2. Moved `PLAN.md` and `DEVLOG.md` up to `E:/Github/` so the folder held only `.git/`
+3. Ran the scaffold:
+   `npx create-next-app@latest . --ts --tailwind --eslint --app --src-dir --import-alias "@/*" --use-npm --disable-git --yes`
+4. Moved both docs back into the repo root
+5. Read `.gitignore` and confirmed `node_modules` and `.env*` were both covered
+6. `npm run dev`, loaded `localhost:3000`, confirmed the starter page rendered, `Ctrl+C`
+7. `git add -A`, then checked `git status --short` for stray `node_modules` *before* committing
+8. Committed → `4eacfe6` (01:07) — 19 files, 7,089 insertions
+9. `git push -u origin main`
+10. Imported the repo on vercel.com in the browser, confirmed Framework Preset auto-detected
+    **Next.js**, left Environment Variables deliberately empty (the database is Phase 2), deployed
+
+Fifteen minutes between the two commits. `git reflog` shows no resets, amends or stashes, so
+it went through on the first attempt.
+
+**Live URL:** <!-- TODO: paste the .vercel.app URL here -->
+
+**Versions actually installed** (from `package.json`, not from what I expected):
+`next` 16.3.0 · `react` / `react-dom` 19.2.8 · `tailwindcss` ^4 · `typescript` ^5 · `eslint` ^9
+
+**Bugs I hit:**
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| <!-- fill in, or write "None — the pre-flight check caught the only blocker before I hit it" --> | | |
+
+**What I can now explain in the walkthrough:**
+
+Reading the generated files instead of just accepting them turned up five things specific to
+this stack version. I verified the first two against the docs shipped inside
+`node_modules/next/dist/docs/` rather than trusting the AI's memory:
+
+- **`"dev": "next dev"` carries no `--turbopack` flag.** On Next 15 this script reads
+  `next dev --turbopack`. The flag is absent in Next 16 because Turbopack became the *default*
+  bundler, not because it was dropped. Webpack is now the opt-in: `next dev --webpack`.
+- **`"lint": "eslint"`, not `next lint`.** Next 16 removed the `next lint` command entirely —
+  you call ESLint directly, with flat config in `eslint.config.mjs` (ESLint 9). The consequence
+  that actually matters: **`next build` no longer runs linting**, so Vercel's build will not
+  fail on a lint error. I have to run `npm run lint` myself.
+- **There is no `tailwind.config.js`, and that is correct.** Tailwind v4 moved configuration
+  into CSS — `src/app/globals.css` opens with `@import "tailwindcss"`, and the build wiring is
+  the `@tailwindcss/postcss` plugin in `postcss.config.mjs`. Hunting for the missing config
+  file is the classic v3 → v4 mistake.
+- **`next-env.d.ts` is on disk but absent from the commit** because `.gitignore` line 41 ignores
+  it. It is regenerated on every `next dev` / `next build`, so committing it is pure churn.
+- **`--disable-git` earned its place.** Without it, `create-next-app` can run `git init` *and*
+  write its own commit titled "Initial commit from Create Next App". The exam grades commit
+  history, so every commit in this repo needed to be mine.
+
+**One assumption I checked and threw away:** I initially read `AGENTS.md` and `CLAUDE.md` as
+evidence that `next dev` had been run before committing, since `AGENTS.md` says its contents are
+"written and re-added by `next dev`". The installation doc says otherwise — `create-next-app`'s
+default setup already "includes `AGENTS.md` (with a `CLAUDE.md` that references it)". Both files
+would be in that commit either way, so they prove nothing about when the dev server ran. Noting
+it because the reasoning was wrong even though the conclusion happened to be right.
+
+**Carried forward into Phase 2:** `.gitignore` line 34 is `.env*` — broader than the
+`.env*.local` I expected. It ignores `.env.example` too, so committing that template will need
+`git add -f .env.example`. Better to know that now than to spend ten minutes wondering why the
+file will not stage.
+
+**Still open:** `README.md` is still the stock `create-next-app` text. Phase 13 replaces it with
+setup instructions, tech choices and what I would improve — which is what the exam actually asks
+for.
+
+**Commit:** `chore: scaffold next.js 16 app with ts and tailwind` (`4eacfe6`)
+
+---
+
+<!-- ==========================================================================
+     ENTRY TEMPLATE — copy the block below for each phase.
+
+     Write it immediately after the commit, while it is still fresh.
+     Two to three minutes. Fourteen short honest entries beat three long
+     reconstructed ones.
+
+     REQUIRED by the exam brief (do not skip these three):
+       · Tools    — which AI tool did this phase
+       · Prompt   — the actual text I typed, pasted, not paraphrased
+       · By hand  — what I changed or rejected myself
+
+     The "By hand" section is the one that earns the marks. An entry reading
+     "I asked for X, got X, used X" proves nothing. An entry reading "it gave
+     me X, I replaced it with Y because Z" proves I read and understood it.
+     If that section is empty for a phase, that is a signal I did not actually
+     read the code — go back and read it.
+     ==========================================================================
+
+## YYYY-MM-DD — Phase N · <short name>
+
+**Goal:** One sentence. What this phase had to achieve.
+
+**Tool:** Claude Code / ChatGPT / Copilot — and which model, if it matters.
+
+**Prompt I gave:**
+> Paste the real prompt. Trim it if it is long, but do not rewrite it
+> to sound smarter than it was.
+
+**What came back:** Two to four lines. Which files, and the approach it took.
+
+**What I changed by hand — and why:**
+- `path/to/file.tsx` — <what I changed> — <why the original was wrong or worse>
+- <or, if I accepted it as-is:> Accepted unchanged. I read it line by line and
+  can explain <the specific mechanism>.
+
+**Bugs I hit:**
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+|         |       |     |
+
+**What I can now explain in the walkthrough:**
+- <the one or two concepts this phase forced me to actually learn>
+
+**Commit:** `<exact commit message>`
+
+---
+     ========================================================================== -->
