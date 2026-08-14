@@ -21,12 +21,12 @@ export default function SearchSortBar({
   const hasFilters = Boolean(q) || Boolean(status) || sort !== "date-desc";
 
   return (
-    <Form action="/" className="flex flex-wrap items-end gap-2">
+    <Form action="/" className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
       {/* The status pill lives outside this form, so it rides along hidden or
           searching would clear the filter. */}
       {status && <input type="hidden" name="status" value={status} />}
 
-      <div className="min-w-0 flex-1 sm:max-w-xs">
+      <div className="w-full sm:min-w-0 sm:flex-1 sm:max-w-xs">
         <label htmlFor="q" className="block text-xs font-medium text-muted">
           Search
         </label>
