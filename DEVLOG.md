@@ -494,6 +494,91 @@ All work through Phase 4 is pushed; `main` and `origin/main` are level.
 
 ---
 
+## 2026-08-14 — Phase 5 · Root layout and navigation
+
+**Goal:** A consistent frame every page sits inside — nav, centred content column, footer — plus
+the metadata and font wiring the scaffold left unfinished. The exam requires "consistent nav
+across all pages", and doing it in the root layout means it is impossible to forget on a page.
+
+**Tool:** Claude Code (Opus 5). It read my existing `layout.tsx` and `globals.css` before writing
+anything rather than assuming what the scaffold had produced.
+
+**Prompt I gave:**
+> DEVLOG and then phase 5
+
+**A bug it found in the generated scaffold.** `globals.css` line 25 was:
+
+```css
+body { font-family: Arial, Helvetica, sans-serif; }
+```
+
+`create-next-app` loads the Geist font via `next/font`, exposes it as `--font-geist-sans`, maps it
+into Tailwind's theme as `--font-sans` — and then overrides all of that with Arial. The font was
+being downloaded on every page load and never rendered. Removing the rule and putting `font-sans`
+on `<body>` fixes it. Worth recording because it came from reading the generated code rather than
+trusting it, which is the habit the exam is actually testing.
+
+**A decision I made and want to defend:** I removed the `@media (prefers-color-scheme: dark)`
+block the scaffold shipped. The exam lists a *dark mode toggle* as a bonus. What the scaffold
+provides is automatic OS-driven dark that only inverts the page background — cards, borders and
+text colours stay light, so the result looks broken rather than themed. A clean light theme now,
+with a proper toggle later if there is time, is the better trade. It is four lines to reinstate.
+
+**What I did by hand:**
+
+- Rewrote `globals.css` down to an `@import` and a four-line `@theme inline` block
+- Created `src/components/Navbar.tsx` — **at the correct path first time.** After two
+  missing-segment mistakes in Phases 3 and 4 I checked against `PLAN.md` §4 before creating the
+  folder rather than after the import failed
+- Updated `layout.tsx`: real `metadata`, `<Navbar />`, a `max-w-5xl` content column, sticky footer
+- Tabbed through every link to confirm the focus rings actually appear
+- Checked the nav at 375px in the device toolbar
+
+**Bugs I hit:**
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+|         |       |     |
+
+**What I can now explain in the walkthrough:**
+
+- **Why `Navbar` is a Client Component but `layout.tsx` is not.** `usePathname()` is a hook, and
+  hooks need a client runtime — that is the *only* reason for the directive. Drop the active-link
+  highlight and the whole nav could be a Server Component shipping zero JavaScript.
+- **`"use client"` marks a boundary downward, not upward.** This is the part people get wrong. A
+  Client Component does not make its parent client, and it does not make its siblings client.
+  `layout.tsx` stays a Server Component and renders `<Navbar />` as a small client island; the
+  pages passed in as `children` are entirely unaffected and still render on the server.
+- **Why the active-link check special-cases `"/"`.** Every path starts with `/`, so
+  `pathname.startsWith("/")` would light up every link at once. The root needs an exact match;
+  everything else uses `startsWith` so a child route keeps its parent highlighted.
+- **Why `aria-current="page"` is on the active link.** The dark pill communicates the current page
+  visually. `aria-current` is what communicates it to a screen reader — colour alone is not an
+  accessible signal.
+- **What `@theme inline` does in Tailwind v4.** It maps the CSS variables `next/font` sets on the
+  `<html>` element into Tailwind's theme, which is what makes the `font-sans` utility resolve to
+  Geist. `inline` matters: without it Tailwind tries to resolve the value at build time, but
+  `next/font` only sets it on the element at runtime.
+- **The sticky-footer pattern.** `flex flex-col` on `<body>` plus `flex-1` on `<main>` puts the
+  footer at the bottom of the viewport on short pages and below the content on long ones, with no
+  fixed positioning and no JavaScript.
+- **Mobile-first gutters.** `px-4 sm:px-6` reads as "16px of side padding by default, 24px above
+  640px". The unprefixed class is the phone case, and prefixed classes only ever add. Writing it
+  the other way round means fighting your own overrides.
+
+**Known and intentional:** the "Add Equipment" link 404s. `/items/new` is not built until Phase 8.
+The link is correct; the destination does not exist yet.
+
+**Still open:**
+- `DATABASE_URL` in Vercel for all three environments, and function region `sin1`
+- `**Live URL:**` in the Phase 1 entry remains an unfilled TODO
+- `src/app/page.tsx` is still the throwaway JSON dump — Phase 6 replaces it
+
+**Commit:** `feat: add root layout and navigation` (`31716d6`) — 4 files, 193 insertions,
+24 deletions. `globals.css` got smaller, which is the right direction.
+
+---
+
 <!-- ==========================================================================
      ENTRY TEMPLATE — copy the block below for each phase.
 
