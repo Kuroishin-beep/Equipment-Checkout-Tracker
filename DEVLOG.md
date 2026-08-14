@@ -287,6 +287,103 @@ ignore rule no longer applies to it and this phase's edit staged normally.
 
 ---
 
+## 2026-08-14 — Phase 3 · Data access layer
+
+**Goal:** Four files under `src/lib/` that stand between the database and everything else.
+After this phase nothing in the app needs to know SQL exists — pages and route handlers call
+five named functions instead.
+
+**Tool:** Claude Code (Opus 5). I asked for the full file contents this phase, having already
+had the architecture explained, and typed/placed them myself.
+
+**Prompts I gave:**
+> also explai waht they do
+>
+> phase 3 with explanation of each
+
+**What came back:** `types.ts`, `validation.ts`, `db.ts`, `items.ts` in full, each with the
+reasoning inline, plus an explanation of how the four connect and why the layer exists at all.
+
+**Something it did that I want on the record:** before writing the Zod schema it installed
+Zod 4.4.3 in a scratch folder and ran a script against it to check the API rather than writing
+from memory. That surfaced a real behaviour that changed the code — `z.string().trim().optional()`
+turns `"   "` into `""`, **not** `undefined`. An empty notes box therefore arrives as an empty
+string, and `""` is not the same thing as `NULL` in a nullable column. That is why `items.ts`
+has a `normaliseNotes()` helper collapsing both cases to `NULL`. It also confirmed `z.iso.date()`
+exists in Zod 4 and correctly rejects `2026-02-31`, which a plain regex would accept — so no
+hand-rolled date refinement was needed.
+
+**What I did by hand:**
+
+- Ran `npm install @neondatabase/serverless zod` — the only two runtime dependencies this
+  project adds beyond the Next.js starter
+- Created all four files under `src/lib/`
+- Replaced `src/app/page.tsx` with a five-line throwaway that dumps `listItems()` as JSON, to
+  prove the whole chain end to end before any UI existed
+- Verified the three things that actually matter in that dump: keys are `camelCase` (the mapper
+  ran), `checkoutDate` is a 10-character string with no `T` or `Z` (the `to_char` cast held),
+  and the Dell row's `notes` is `null` rather than `""`
+
+**Bugs I hit:**
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `Module not found: Can't resolve '@/lib/items'` | I created the files in `src/app/lib/`. The `@/*` alias in `tsconfig.json` maps to `./src/*`, so `@/lib/items` resolves to `src/lib/items` — one directory higher than where they were | `mv src/app/lib src/lib`, then restarted the dev server. Next caches module resolution, so hot reload alone does not pick it up |
+
+I fixed it by moving the folder rather than by changing the import to `@/app/lib/items`, which
+would also have worked. Everything under `src/app/` is the App Router's routing tree; a data
+layer is not a route, and keeping the tree to routes only is what someone reading the repo
+expects. It also keeps the file map in `PLAN.md` §4 honest.
+
+**What I can now explain in the walkthrough:**
+
+- **Why types and validation are not redundant.** TypeScript types are erased at compile time.
+  `const item: Item = await request.json()` compiles happily and is a lie — the bytes that
+  arrived could be anything. Zod runs at runtime and actually inspects the data. Types catch me
+  writing `item.itmeName`; validation catches a stranger POSTing garbage to a public API.
+- **Why `${id}` in a `sql` template is not string interpolation.** `sql` is a *tagged* template:
+  the driver receives the static SQL and the values as separate arguments and forwards them
+  separately to Postgres, so `${id}` becomes `$1`. A hostile id arrives as a value to compare
+  against, never as SQL. That is the entire injection defence, and it is why there is no
+  escaping code anywhere in the file.
+- **Why `to_char(checkout_date, 'YYYY-MM-DD')` is load-bearing.** Postgres drivers commonly parse
+  `DATE` columns into JavaScript `Date` objects. A `Date` is a timestamp, so it lands at local
+  midnight and can render as the previous day in another timezone — exactly the bug the `DATE`
+  column was chosen to avoid. Casting it back to a string in SQL preserves the guarantee.
+- **Why the five return types are the HTTP contract.** `getItem` returns `Item | null` and
+  `deleteItem` returns `boolean` specifically so Phase 4 can map `null`/`false` to `404` and a
+  successful delete to `204`. Return the wrong thing and the route handler cannot distinguish
+  "missing" from "succeeded".
+- **Why the status filter is written as `WHERE (${status}::text IS NULL OR status = ${status})`.**
+  A tagged template cannot build dynamic SQL, so instead the condition disables itself: pass
+  `null` and the first half is true, making the clause a no-op. One query serves both the
+  unfiltered and filtered cases. The `::text` cast is required because Postgres cannot infer a
+  type for a bare NULL parameter.
+- **Why `as const` on the `STATUSES` array.** Without it TypeScript widens the array to
+  `string[]` and `(typeof STATUSES)[number]` degrades to `string`. With it, one array serves as
+  both the runtime list I map into dropdown options and the compile-time union type.
+
+**A decision I made that differs from a naive mapping:** the `Item` type has no `createdAt` or
+`updatedAt`, even though both columns exist. They are there for stable ordering and future
+auditing; nothing in the UI displays them, so they do not belong in the type the UI consumes.
+Easy to add if a bonus feature needs them.
+
+**Housekeeping note:** this commit also swept in the Phase 2 DEVLOG entry, which should have
+been its own `docs:` commit. Not worth rewriting history over, but the commit is slightly
+broader than its message suggests.
+
+**Still open:**
+- `2ed70d9` is not yet pushed (`main` is ahead of `origin/main` by 1)
+- `DATABASE_URL` still needs adding to Vercel for all three environments — Phase 3 is the first
+  code that reads it, so from here a missing variable means a broken deploy
+- `**Live URL:**` in the Phase 1 entry is still an unfilled TODO
+- `src/app/page.tsx` is still the throwaway JSON dump — Phase 6 replaces it
+
+**Commit:** `feat: add data access layer and validation schema` (`2ed70d9`) — 8 files,
+312 insertions, 71 deletions
+
+---
+
 <!-- ==========================================================================
      ENTRY TEMPLATE — copy the block below for each phase.
 
