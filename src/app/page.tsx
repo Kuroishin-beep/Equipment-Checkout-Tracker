@@ -1,10 +1,8 @@
-import Link from "next/link";
-import { listItems } from "@/lib/items";
+import { listItems, getStats } from "@/lib/items";
 import { STATUSES, type Status } from "@/lib/types";
 import ItemTable from "@/components/ItemTable";
 import EmptyState from "@/components/EmptyState";
 import FilterBar from "@/components/FilterBar";
-import { listItems, getStats } from "@/lib/items";
 import StatsCards from "@/components/StatsCards";
 
 // Never trust a query string. ?status=anything arrives here as an ordinary
