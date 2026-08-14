@@ -6,6 +6,7 @@ import { getItem } from "@/lib/items";
 import { formatDate } from "@/lib/format";
 import StatusBadge from "@/components/StatusBadge";
 import ConditionBadge from "@/components/ConditionBadge";
+import DeleteButton from "@/components/DeleteButton";
 
 // React's cache() memoises a function for the lifetime of a single request.
 // generateMetadata and the page component below both need the same item, and
@@ -103,6 +104,7 @@ export default async function ItemDetailPage(props: PageProps<"/items/[id]">) {
           >
             Edit
           </Link>
+              <DeleteButton id={item.id} itemName={item.itemName} />
         </div>
       </div>
     </div>

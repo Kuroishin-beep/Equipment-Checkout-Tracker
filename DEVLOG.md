@@ -874,6 +874,140 @@ it, because a button that silently does nothing is worse than one that is honest
 
 ---
 
+## 2026-08-14 — Phase 10 · Edit page
+
+**Goal:** `/items/[id]/edit` — a pre-filled form that saves and redirects.
+
+**Tool:** Claude Code (Opus 5).
+
+**Prompt I gave:**
+> DEVLOG and then Phase 10
+
+**This phase was one file and 57 lines, and that is the whole point of it.** None of those lines
+are form logic. The entire edit feature is:
+
+```tsx
+<ItemForm item={item} />
+```
+
+Because Phase 8 built `ItemForm` with an optional `item` prop, passing one in switches the same
+component from `POST /api/items` to `PUT /api/items/{id}`, pre-fills every field, relabels the
+button to "Save changes", and redirects to the detail page instead of the dashboard. The
+alternative — a second 278-line form — is the single most common way CRUD code rots: every future
+change to a field, a validation rule or a style has to be made twice, and eventually is not.
+
+**What I did by hand:** created `src/app/items/[id]/edit/page.tsx`, then confirmed in the DevTools
+Network tab that saving an edit issues a **PUT**, not a POST.
+
+**Bugs I hit:**
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+|         |       |     |
+
+**What I can now explain in the walkthrough:**
+
+- **The serialization boundary, and why it vindicates a Phase 3 decision.** `EditItemPage` is a
+  Server Component and `ItemForm` is a Client Component, so `item` is *serialized* to cross
+  between them — the server embeds it in the payload and the browser reconstructs it. Only plain
+  data survives that trip: objects, strings, numbers, `null`, arrays. Not functions, not class
+  instances, **not `Date` objects**. `checkoutDate` is a string the whole way — Postgres `DATE` →
+  `to_char` cast → `Item` type → this prop → `<input type="date">` — so it crosses four layers
+  with zero conversions. Had it been a `Date`, this prop would have been a problem to work around.
+- **The pattern: the Server Component fetches, the Client Component receives via props.** The
+  client never fetches its own initial data. No `useEffect`, no loading spinner, no flash of an
+  empty form — the values are in the HTML when it arrives. I checked with View Source.
+- **Why the edit page needs its own `notFound()` guard.** Without it, `/items/banana/edit` would
+  render an empty form that then 404s on save. Failing up front is better than failing after the
+  user has typed.
+- **Which cache-invalidation mechanism is actually doing the work.** The `PUT` handler calls
+  `revalidatePath("/")` and `revalidatePath("/items/{id}")`, but both routes are *dynamic* — they
+  await `params` and query the database per request, so there is no Full Route Cache entry to
+  clear. The real work is done by `router.refresh()` on the client, which drops the client-side
+  router cache after a save. The `revalidatePath` calls are defensive and become load-bearing the
+  moment any caching is introduced. Knowing which of the two is doing the work today is a better
+  answer than adding a third call because it looked symmetrical.
+
+**Milestone:** 12 commits, past the exam's 8–10 minimum, with three phases still to run. Every
+required feature except Delete is now built.
+
+**Still open:**
+- `DATABASE_URL` in Vercel for all three environments, and function region `sin1`
+- `**Live URL:**` in the Phase 1 entry remains an unfilled TODO
+- The detail page has no Delete button — Phase 11
+
+**Commit:** `feat: add edit item page` (`e3707c8`) — 2 files, 115 insertions
+
+---
+
+## 2026-08-14 — Phase 11 · Delete with confirmation
+
+**Goal:** The last required feature — a Delete button on the detail page that asks for
+confirmation before destroying anything.
+
+**Tool:** Claude Code (Opus 5).
+
+**Prompt I gave:**
+> DEVLOG and then Phase 11
+>
+> DEVLOG and then Phase 12, I dont see the delete
+
+**Bugs I hit:**
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| No Delete button anywhere on the detail page | I created `DeleteButton.tsx` but never did step 2 — the component was never imported or rendered in `src/app/items/[id]/page.tsx`. The file existed and compiled fine; nothing referenced it | Added the import and `<DeleteButton id={item.id} itemName={item.itemName} />` to the button row |
+
+**Worth recording because of the failure mode.** An unused component produces no error at all —
+no missing import, no type error, no console warning. It compiles, it lints, and it is simply
+absent from the page. The only thing that catches it is looking at the running app and noticing
+something you expected is not there. That is an argument for the per-phase verification tables in
+this log: "the file exists" and "the feature works" are different claims, and only the second one
+matters.
+
+**What I did by hand:** created `src/components/DeleteButton.tsx`, then wired it into the detail
+page after spotting the omission.
+
+**What I can now explain in the walkthrough:**
+
+- **Why the native `<dialog>` element instead of `window.confirm()` or a hand-rolled modal.**
+  `showModal()` — not `show()` — gets four things from the browser for free: focus is trapped
+  inside the dialog, Escape closes it, it renders in the top layer above everything regardless of
+  z-index, and `::backdrop` becomes available for the dimmed overlay. `window.confirm()` is one
+  line but is unstyleable, blocks the main thread, and looks like a browser security warning
+  rather than part of the app. A hand-rolled `<div>` means reimplementing focus trapping and
+  Escape handling, and getting focus management subtly wrong is the norm rather than the
+  exception.
+- **Why Delete is a `<button>` and never an `<a href>`.** `DELETE` is not a safe method. Browsers,
+  link prefetchers and crawlers follow links speculatively, so a destructive action behind an
+  anchor eventually fires with nobody having clicked it. This is the concrete consequence of the
+  safe/unsafe distinction from Phase 4.
+- **Why the `204` response must not be parsed as JSON.** `204 No Content` is success with no body
+  by definition. `await response.json()` on an empty response throws — and since the delete has
+  already succeeded at that point, the user would see an error for an action that worked.
+- **Why `404` gets its own message.** It is a real race, not defensive padding: another tab or
+  another person can delete the item between this page rendering and the button being clicked.
+  I tested it with two browser tabs. "This item no longer exists" is useful; "something went
+  wrong" is not. This is `deleteItem()`'s boolean return and the handler's `404` from Phases 3
+  and 4 finally paying off end to end.
+- **Why `router.push("/")` comes before `router.refresh()`.** The current page is about to stop
+  existing — leave it first, then re-render the dashboard without the row.
+- **Why `useRef` and not `useState` for the dialog.** Its open/closed state is owned by the DOM
+  element, exposed through the imperative `showModal()` and `close()` methods. Mirroring that in
+  React state would create two sources of truth that can disagree.
+
+**Milestone: all seven required features are complete.** Dashboard with badges, filter and empty
+state; create with validation and a date picker; detail with Edit and Delete; pre-filled edit;
+delete with confirmation; responsive throughout; consistent nav.
+
+**Still open:**
+- `DATABASE_URL` in Vercel for all three environments, and function region `sin1`
+- `**Live URL:**` in the Phase 1 entry remains an unfilled TODO
+
+**Commit:** `feat: add delete with confirmation dialog` — <!-- TODO: paste commit hash -->
+
+---
+
 <!-- ==========================================================================
      ENTRY TEMPLATE — copy the block below for each phase.
 
