@@ -1,35 +1,39 @@
 import Link from "next/link";
-import { STATUSES, type Status } from "@/lib/types";
+import { STATUSES, type Status, type SortKey } from "@/lib/types";
+import { dashboardHref } from "@/lib/url";
 
-// "All" is the ABSENCE of the query parameter, not ?status=All. That keeps the
-// unfiltered dashboard on a clean "/" and means there is no magic string to
-// special-case when parsing.
+// "All" is the absence of the parameter, not ?status=All — keeps the unfiltered
+// dashboard on a clean "/" with no magic string to special-case.
 const OPTIONS: { label: string; value: Status | null }[] = [
   { label: "All", value: null },
   ...STATUSES.map((status) => ({ label: status, value: status })),
 ];
 
-export default function FilterBar({ active }: { active: Status | null }) {
+export default function FilterBar({
+  active,
+  q,
+  sort,
+}: {
+  active: Status | null;
+  q: string;
+  sort: SortKey;
+}) {
   return (
-    // <nav> with a label, because this is a set of navigation choices. A screen
-    // reader can jump straight to it and hear what it is for.
     <nav aria-label="Filter by status" className="flex flex-wrap gap-2">
       {OPTIONS.map(({ label, value }) => {
         const isActive = value === active;
 
-        // encodeURIComponent is not optional here: "Checked Out" and "Under
-        // Repair" contain a space, which must be %20 in a URL.
-        const href = value ? `/?status=${encodeURIComponent(value)}` : "/";
-
         return (
           <Link
             key={label}
-            href={href}
+            // Carries the current search and sort through, so a pill narrows
+            // the results instead of resetting them.
+            href={dashboardHref({ status: value, q, sort })}
             aria-current={isActive ? "true" : undefined}
-            className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 ${
+            className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-page ${
               isActive
                 ? "bg-brand text-white"
-                : "bg-white text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-100 hover:text-slate-900"
+                : "bg-surface text-muted ring-1 ring-inset ring-line hover:bg-page hover:text-ink"
             }`}
           >
             {label}

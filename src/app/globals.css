@@ -1,12 +1,43 @@
 @import "tailwindcss";
 
+/* Dark mode is driven by a .dark class on <html>, set by ThemeToggle. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Semantic palette. Switching theme redefines these six values, so components
+   use bg-surface / text-ink / border-line and need no dark: variants. */
+:root {
+  --page: #f8fafc;
+  --surface: #ffffff;
+  --ink: #0f172a;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --line-strong: #cbd5e1;
+}
+
+.dark {
+  --page: #0b1120;
+  --surface: #151d31;
+  --ink: #e8ecf6;
+  --muted: #93a1b8;
+  --line: #253048;
+  --line-strong: #35435f;
+}
+
+/* Fixed across both themes. */
 @theme {
   --color-brand: #7c3aed;
   --color-brand-dark: #6d28d9;
   --color-brand-light: #f5f3ff;
 }
 
+/* inline keeps the var() reference so the .dark override applies at runtime. */
 @theme inline {
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }

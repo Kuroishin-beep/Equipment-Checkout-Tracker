@@ -1,24 +1,22 @@
 import Link from "next/link";
 
 const panel =
-  "rounded-lg border border-dashed border-slate-300 bg-white px-6 py-12 text-center";
+  "rounded-xl border border-dashed border-line-strong bg-surface px-6 py-12 text-center";
 const button =
-  "mt-6 inline-flex items-center rounded-md bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2";
+  "mt-6 inline-flex items-center rounded-md bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-page";
 
+// Two different empties. "Nothing matches your filter" and "nothing exists yet"
+// look the same but mean opposite things, and need opposite calls to action.
 export default function EmptyState({ filtered = false }: { filtered?: boolean }) {
-  // "No results for this filter" and "nothing exists yet" look identical but
-  // mean completely different things. Showing "Add Equipment" to someone who
-  // has 5 items and just picked a filter that matches none of them is
-  // misleading — what they want is a way back.
   if (filtered) {
     return (
       <div className={panel}>
-        <h2 className="text-base font-semibold text-slate-900">No matching equipment</h2>
-        <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">
-          No items currently have this status.
+        <h2 className="text-base font-semibold text-ink">No matching equipment</h2>
+        <p className="mx-auto mt-1 max-w-sm text-sm text-muted">
+          Nothing matches the current search or filter.
         </p>
         <Link href="/" className={button}>
-          Clear filter
+          Clear filters
         </Link>
       </div>
     );
@@ -26,8 +24,8 @@ export default function EmptyState({ filtered = false }: { filtered?: boolean })
 
   return (
     <div className={panel}>
-      <h2 className="text-base font-semibold text-slate-900">No equipment yet</h2>
-      <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">
+      <h2 className="text-base font-semibold text-ink">No equipment yet</h2>
+      <p className="mx-auto mt-1 max-w-sm text-sm text-muted">
         Nothing is being tracked. Add your first piece of equipment to get started.
       </p>
       <Link href="/items/new" className={button}>

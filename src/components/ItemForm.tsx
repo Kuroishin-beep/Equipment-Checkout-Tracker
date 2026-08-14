@@ -6,33 +6,33 @@ import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { itemInputSchema, type ItemInput } from "@/lib/validation";
 import { STATUSES, CONDITIONS, type Item } from "@/lib/types";
+import { useToast } from "./ToastProvider";
 
-// Field-level errors keyed by field name. This is the exact shape
-// z.flattenError produces AND the exact shape the API returns on a 400 —
-// deliberately, so client-side and server-side failures land in the same state
-// and render through the same markup. One error path, not two.
+// Same shape z.flattenError produces AND the shape the API returns on a 400, so
+// client and server failures render through identical markup.
 type FieldErrors = Partial<Record<keyof ItemInput, string[]>>;
 
 const inputBase =
-  "mt-1 block w-full rounded-md border px-3 py-2 text-sm text-slate-900 shadow-sm transition-colors placeholder:text-slate-400 focus:outline-none focus:ring-2 disabled:bg-slate-50 disabled:text-slate-500";
-const inputOk = "border-slate-300 focus:border-slate-900 focus:ring-brand";
+  "mt-1 block w-full rounded-md border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus:outline-none focus:ring-2 disabled:opacity-60";
+const inputOk = "border-line focus:border-brand focus:ring-brand";
 const inputBad = "border-red-400 focus:border-red-500 focus:ring-red-500";
-const labelClass = "block text-sm font-medium text-slate-700";
+const labelClass = "block text-sm font-medium text-ink";
+const focus =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-page";
 
 function FieldError({ id, messages }: { id: string; messages?: string[] }) {
   if (!messages?.length) return null;
   return (
-    <p id={id} className="mt-1 text-sm text-red-600">
+    <p id={id} className="mt-1 text-sm text-red-600 dark:text-red-400">
       {messages[0]}
     </p>
   );
 }
 
+// One component for create and edit. The presence of `item` decides which.
 export default function ItemForm({ item }: { item?: Item }) {
   const router = useRouter();
-
-  // The presence of `item` is what makes this a create form or an edit form.
-  // Phase 10 reuses this component by passing one in.
+  const toast = useToast();
   const isEdit = Boolean(item);
 
   const [values, setValues] = useState<ItemInput>({
@@ -40,10 +40,8 @@ export default function ItemForm({ item }: { item?: Item }) {
     assignedTo: item?.assignedTo ?? "",
     status: item?.status ?? "Available",
     condition: item?.condition ?? "Good",
-    // Left empty rather than defaulting to today. Computing "today" here would
-    // run during server render AND again on the client; if the two are in
-    // different timezones they produce different dates and React reports a
-    // hydration mismatch. The field is required, so the user picks.
+    // Not defaulted to today: computing it would run on server and client and
+    // could differ across timezones, causing a hydration mismatch.
     checkoutDate: item?.checkoutDate ?? "",
     notes: item?.notes ?? "",
   });
@@ -54,20 +52,18 @@ export default function ItemForm({ item }: { item?: Item }) {
 
   function update<K extends keyof ItemInput>(field: K, value: ItemInput[K]) {
     setValues((prev) => ({ ...prev, [field]: value }));
-    // Clear this field's error the moment it is edited. Leaving a stale error
-    // under a field the user has already fixed is actively confusing.
+    // Clear the error as soon as the field is edited.
     setErrors((prev) => ({ ...prev, [field]: undefined }));
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    // Without this the browser does its own full-page form submission and the
-    // fetch below never runs.
+    // Without this the browser does its own full-page submit and the fetch
+    // below never runs.
     event.preventDefault();
     setFormError(null);
 
-    // Client-side validation: instant feedback, no network round trip. The
-    // SAME schema runs again in the route handler — this is a convenience for
-    // honest users, never a security control.
+    // Client-side pass for instant feedback. The same schema runs again in the
+    // route handler, because the API is public.
     const parsed = itemInputSchema.safeParse(values);
     if (!parsed.success) {
       setErrors(z.flattenError(parsed.error).fieldErrors);
@@ -78,10 +74,8 @@ export default function ItemForm({ item }: { item?: Item }) {
     setSubmitting(true);
 
     try {
-      // An HTML <form> can only send GET or POST — PUT is not available to it.
-      // Using the correct verb requires fetch, and calling fetch from an event
-      // handler requires a client runtime. The HTTP requirement and the
-      // "use client" requirement are the same decision.
+      // An HTML form can only send GET or POST. PUT needs fetch — which is why
+      // this component needs "use client" at all.
       const response = await fetch(isEdit ? `/api/items/${item!.id}` : "/api/items", {
         method: isEdit ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -90,8 +84,6 @@ export default function ItemForm({ item }: { item?: Item }) {
 
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
-
-        // A 400 with fieldErrors renders exactly like a client-side failure.
         if (response.status === 400 && payload?.fieldErrors) {
           setErrors(payload.fieldErrors);
         } else {
@@ -103,14 +95,12 @@ export default function ItemForm({ item }: { item?: Item }) {
 
       const saved: Item = await response.json();
 
-      // revalidatePath in the route handler marked the cached pages stale;
-      // router.refresh() is what actually re-runs the Server Components so the
-      // dashboard shows the new row.
+      toast(isEdit ? `"${saved.itemName}" updated` : `"${saved.itemName}" added`);
+
+      // push navigates; refresh re-runs the Server Components so the list is
+      // current. The button stays disabled — POST is not idempotent.
       router.push(isEdit ? `/items/${saved.id}` : "/");
       router.refresh();
-
-      // Deliberately NOT re-enabling the button here. Navigation is in flight,
-      // and POST is not idempotent — two submits would create two items.
     } catch {
       setFormError("Could not reach the server. Check your connection and try again.");
       setSubmitting(false);
@@ -118,15 +108,13 @@ export default function ItemForm({ item }: { item?: Item }) {
   }
 
   return (
-    // noValidate turns off the browser's own validation bubbles. Without it the
-    // user would get browser popups for some errors and our inline messages for
-    // others — two different UIs for the same problem.
+    // noValidate so Zod owns validation — otherwise browser bubbles and inline
+    // messages would both appear for the same form.
     <form onSubmit={handleSubmit} noValidate className="space-y-5">
       {formError && (
-        // role="alert" makes a screen reader announce this the moment it appears.
         <div
           role="alert"
-          className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          className="rounded-md border border-red-500/30 bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-500/15 dark:text-red-200"
         >
           {formError}
         </div>
@@ -143,8 +131,8 @@ export default function ItemForm({ item }: { item?: Item }) {
             value={values.itemName}
             onChange={(e) => update("itemName", e.target.value)}
             disabled={submitting}
-            // aria-invalid and aria-describedby are what connect the error text
-            // to the field for a screen reader. A red border says nothing.
+            // aria-* is what connects the error text to the field; a red border
+            // says nothing to a screen reader.
             aria-invalid={Boolean(errors.itemName)}
             aria-describedby={errors.itemName ? "itemName-error" : undefined}
             className={`${inputBase} ${errors.itemName ? inputBad : inputOk}`}
@@ -175,6 +163,7 @@ export default function ItemForm({ item }: { item?: Item }) {
           <label htmlFor="status" className={labelClass}>
             Status <span className="text-red-500">*</span>
           </label>
+          {/* Options come from the same array the schema and badges use. */}
           <select
             id="status"
             value={values.status}
@@ -182,13 +171,8 @@ export default function ItemForm({ item }: { item?: Item }) {
             disabled={submitting}
             className={`${inputBase} ${errors.status ? inputBad : inputOk}`}
           >
-            {/* Options come from the same array the Zod schema and the badge
-                colours use. Add a fifth status in types.ts and it appears here
-                automatically. */}
             {STATUSES.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
+              <option key={status} value={status}>{status}</option>
             ))}
           </select>
           <FieldError id="status-error" messages={errors.status} />
@@ -206,9 +190,7 @@ export default function ItemForm({ item }: { item?: Item }) {
             className={`${inputBase} ${errors.condition ? inputBad : inputOk}`}
           >
             {CONDITIONS.map((condition) => (
-              <option key={condition} value={condition}>
-                {condition}
-              </option>
+              <option key={condition} value={condition}>{condition}</option>
             ))}
           </select>
           <FieldError id="condition-error" messages={errors.condition} />
@@ -218,10 +200,8 @@ export default function ItemForm({ item }: { item?: Item }) {
           <label htmlFor="checkoutDate" className={labelClass}>
             Checkout date <span className="text-red-500">*</span>
           </label>
-          {/* type="date" IS the date picker the exam asks for — the browser's
-              native one. It reads and writes "YYYY-MM-DD" strings, which is
-              exactly the format the DATE column and the Item type use, so the
-              value passes end to end without a single conversion. */}
+          {/* type="date" IS the date picker, and it speaks YYYY-MM-DD — the same
+              format the DATE column and the Item type use, so no conversion. */}
           <input
             id="checkoutDate"
             type="date"
@@ -237,14 +217,12 @@ export default function ItemForm({ item }: { item?: Item }) {
 
         <div className="sm:col-span-2">
           <label htmlFor="notes" className={labelClass}>
-            Notes <span className="text-slate-400">(optional)</span>
+            Notes <span className="text-muted">(optional)</span>
           </label>
+          {/* ?? "" because a controlled input must never receive undefined. */}
           <textarea
             id="notes"
             rows={4}
-            // ?? "" because notes is optional in the schema, but a controlled
-            // input must never receive undefined — React would switch it to an
-            // uncontrolled input and warn.
             value={values.notes ?? ""}
             onChange={(e) => update("notes", e.target.value)}
             disabled={submitting}
@@ -257,18 +235,18 @@ export default function ItemForm({ item }: { item?: Item }) {
         </div>
       </div>
 
-      <div className="flex items-center gap-3 border-t border-slate-200 pt-5">
+      <div className="flex items-center gap-3 border-t border-line pt-5">
         <button
           type="submit"
           disabled={submitting}
-          className="inline-flex items-center rounded-md bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className={`inline-flex items-center rounded-md bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50 ${focus}`}
         >
           {submitting ? "Saving…" : isEdit ? "Save changes" : "Create item"}
         </button>
 
         <Link
           href={isEdit ? `/items/${item!.id}` : "/"}
-          className="rounded-md px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+          className={`rounded-md px-4 py-2 text-sm font-medium text-muted transition-colors hover:bg-page hover:text-ink ${focus}`}
         >
           Cancel
         </Link>

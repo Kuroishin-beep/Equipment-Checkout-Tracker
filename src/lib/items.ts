@@ -1,5 +1,5 @@
 import { sql } from "./db";
-import { STATUSES, type Item, type Status } from "@/lib/types";
+import { STATUSES, type Item, type Status, type SortKey } from "@/lib/types";
 import type { ItemInput } from "./validation";
 
 // The raw shape Postgres hands back — snake_case, exactly as the columns are
@@ -41,19 +41,43 @@ function normaliseNotes(notes: string | undefined): string | null {
 }
 
 export async function listItems(
-  options: { status?: Status | null } = {}
+  options: { status?: Status | null; q?: string | null; sort?: SortKey | null } = {}
 ): Promise<Item[]> {
   const status = options.status ?? null;
 
-  // The filter disables itself. You cannot concatenate a WHERE clause into a
-  // tagged template, so instead the condition is written to be always-true when
-  // the parameter is NULL. One query serves both "all items" and "filtered".
+  // The % wildcards go on here rather than in SQL, so the value stays a single
+  // parameter. ILIKE is LIKE but case-insensitive.
+  const search = options.q?.trim() ? `%${options.q.trim()}%` : null;
+
+  const sort = options.sort ?? "date-desc";
+
   const rows = await sql`
     SELECT id, item_name, assigned_to, status, condition,
            to_char(checkout_date, 'YYYY-MM-DD') AS checkout_date, notes
     FROM items
     WHERE (${status}::text IS NULL OR status = ${status})
-    ORDER BY checkout_date DESC, created_at DESC
+      AND (${search}::text IS NULL
+           OR item_name   ILIKE ${search}
+           OR assigned_to ILIKE ${search})
+    ORDER BY
+      -- You cannot parameterise an ORDER BY clause, so each sort option is a
+      -- CASE that evaluates to NULL when it is not the selected one. All-NULL
+      -- means every row ties, so that term becomes a no-op and ordering falls
+      -- through to the next line. Only one is ever active.
+      CASE WHEN ${sort}::text = 'name' THEN item_name END ASC,
+      CASE WHEN ${sort}::text = 'condition' THEN
+        -- Alphabetical would give Fair, Good, New, Poor. This is the order a
+
+        CASE condition
+          WHEN 'New'  THEN 1
+          WHEN 'Good' THEN 2
+          WHEN 'Fair' THEN 3
+          WHEN 'Poor' THEN 4
+        END
+      END ASC,
+      CASE WHEN ${sort}::text = 'date-asc'  THEN checkout_date END ASC,
+      CASE WHEN ${sort}::text = 'date-desc' THEN checkout_date END DESC,
+      created_at DESC
   `;
 
   return (rows as ItemRow[]).map(rowToItem);
