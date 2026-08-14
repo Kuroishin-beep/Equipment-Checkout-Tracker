@@ -3,7 +3,7 @@ import Link from "next/link";
 const panel =
   "rounded-lg border border-dashed border-slate-300 bg-white px-6 py-12 text-center";
 const button =
-  "mt-6 inline-flex items-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2";
+  "mt-6 inline-flex items-center rounded-md bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2";
 
 export default function EmptyState({ filtered = false }: { filtered?: boolean }) {
   // "No results for this filter" and "nothing exists yet" look identical but

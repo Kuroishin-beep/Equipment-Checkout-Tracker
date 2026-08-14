@@ -5,7 +5,7 @@ import StatusBadge from "./StatusBadge";
 import ConditionBadge from "./ConditionBadge";
 
 const focusRing =
-  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2";
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2";
 
 export default function ItemTable({ items }: { items: Item[] }) {
   return (

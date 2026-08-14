@@ -9,49 +9,34 @@ const LINKS = [
 ];
 
 export default function Navbar() {
-  // usePathname is a hook, and hooks only run in Client Components — this is
-  // the entire reason for the "use client" directive at the top of this file.
-  // Without the active-link highlight, this could have stayed a Server
-  // Component and shipped zero JavaScript.
   const pathname = usePathname();
+
+  // The button is pointless when you're already on the create page, so it
+  // hides there. This is the only remaining reason the nav needs usePathname —
+  // and therefore the only reason it's still a Client Component.
+  const onCreatePage = pathname === "/items/new";
 
   return (
     <header className="border-b border-slate-200 bg-white">
       <nav className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <Link
           href="/"
-          className="rounded-md text-base font-semibold tracking-tight text-slate-900 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
+          className="flex items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
         >
-          Equipment Tracker
+          {/* logo mark from above */}
+          <span className="text-base font-semibold tracking-tight text-slate-900">
+            Equipment Tracker
+          </span>
         </Link>
 
-        <ul className="flex items-center gap-1">
-          {LINKS.map((link) => {
-            // "/" would match every path with startsWith, so it needs an exact
-            // comparison. Everything else uses startsWith so that a child route
-            // keeps its parent's link highlighted.
-            const isActive =
-              link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
-
-            return (
-              <li key={link.href}>
-                <Link
-                  href={link.href}
-                  // aria-current is what tells a screen reader which link is the
-                  // current page. Colour alone does not communicate that.
-                  aria-current={isActive ? "page" : undefined}
-                  className={`block rounded-md px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 ${
-                    isActive
-                      ? "bg-slate-900 text-white"
-                      : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                  }`}
-                >
-                  {link.label}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
+        {!onCreatePage && (
+          <Link
+            href="/items/new"
+            className="inline-flex items-center rounded-md bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
+          >
+            Add Equipment
+          </Link>
+        )}
       </nav>
     </header>
   );

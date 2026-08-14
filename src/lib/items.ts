@@ -1,5 +1,5 @@
 import { sql } from "./db";
-import type { Item, Status } from "./types";
+import { STATUSES, type Item, type Status } from "@/lib/types";
 import type { ItemInput } from "./validation";
 
 // The raw shape Postgres hands back — snake_case, exactly as the columns are
@@ -106,6 +106,35 @@ export async function updateItem(id: string, input: ItemInput): Promise<Item | n
   return row ? rowToItem(row) : null;
 }
 
+export async function getStats(): Promise<{
+  total: number;
+  byStatus: Record<Status, number>;
+}> {
+  // count(*) returns bigint in Postgres, and drivers hand bigint back as a
+  // STRING because a JS number can't safely hold the full range. ::int casts
+  // it to something that arrives as a real number — without it, "5" + "2"
+  // would concatenate instead of adding.
+  const rows = (await sql`
+    SELECT status, count(*)::int AS count
+    FROM items
+    GROUP BY status
+  `) as { status: Status; count: number }[];
+
+  // GROUP BY only returns statuses that have at least one row. Starting from
+  // zero for all four means "Retired: 0" still renders instead of vanishing.
+  const byStatus = Object.fromEntries(
+    STATUSES.map((status) => [status, 0])
+  ) as Record<Status, number>;
+
+  let total = 0;
+  for (const row of rows) {
+    byStatus[row.status] = row.count;
+    total += row.count;
+  }
+
+  return { total, byStatus };
+}
+
 export async function deleteItem(id: string): Promise<boolean> {
   if (!UUID_RE.test(id)) return false;
 
@@ -114,3 +143,4 @@ export async function deleteItem(id: string): Promise<boolean> {
   const rows = await sql`DELETE FROM items WHERE id = ${id} RETURNING id`;
   return (rows as { id: string }[]).length > 0;
 }
+

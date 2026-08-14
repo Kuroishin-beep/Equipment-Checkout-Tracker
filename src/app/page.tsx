@@ -4,6 +4,8 @@ import { STATUSES, type Status } from "@/lib/types";
 import ItemTable from "@/components/ItemTable";
 import EmptyState from "@/components/EmptyState";
 import FilterBar from "@/components/FilterBar";
+import { listItems, getStats } from "@/lib/items";
+import StatsCards from "@/components/StatsCards";
 
 // Never trust a query string. ?status=anything arrives here as an ordinary
 // string typed by whoever is holding the URL bar. It is checked against the
@@ -24,7 +26,10 @@ export default async function DashboardPage(props: PageProps<"/">) {
 
   // The filter goes into the SQL WHERE clause. The database returns only the
   // matching rows — the browser never receives the ones it is not showing.
-  const items = await listItems({ status });
+  // Promise.all so the two queries run concurrently instead of one after the
+// other. They don't depend on each other, so awaiting them in sequence would
+// just add the second round trip to the page's load time.
+  const [items, stats] = await Promise.all([listItems({ status }), getStats()]);
 
   return (
     <div>
@@ -38,16 +43,13 @@ export default async function DashboardPage(props: PageProps<"/">) {
             {status ? ` · filtered by ${status}` : " tracked"}
           </p>
         </div>
-
-        <Link
-          href="/items/new"
-          className="inline-flex items-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
-        >
-          Add Equipment
-        </Link>
       </div>
 
       <div className="mt-6">
+        <StatsCards total={stats.total} byStatus={stats.byStatus} />
+      </div>
+
+      <div className="mt-4">
         <FilterBar active={status} />
       </div>
 

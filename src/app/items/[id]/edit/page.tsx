@@ -35,7 +35,7 @@ export default async function EditItemPage(props: PageProps<"/items/[id]/edit">)
     <div className="mx-auto max-w-2xl">
       <Link
         href={`/items/${item.id}`}
-        className="inline-flex items-center rounded text-sm font-medium text-slate-600 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
+        className="inline-flex items-center rounded text-sm font-medium text-slate-600 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
       >
         ← Back to item
       </Link>

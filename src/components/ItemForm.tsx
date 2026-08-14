@@ -15,7 +15,7 @@ type FieldErrors = Partial<Record<keyof ItemInput, string[]>>;
 
 const inputBase =
   "mt-1 block w-full rounded-md border px-3 py-2 text-sm text-slate-900 shadow-sm transition-colors placeholder:text-slate-400 focus:outline-none focus:ring-2 disabled:bg-slate-50 disabled:text-slate-500";
-const inputOk = "border-slate-300 focus:border-slate-900 focus:ring-slate-900";
+const inputOk = "border-slate-300 focus:border-slate-900 focus:ring-brand";
 const inputBad = "border-red-400 focus:border-red-500 focus:ring-red-500";
 const labelClass = "block text-sm font-medium text-slate-700";
 
@@ -261,14 +261,14 @@ export default function ItemForm({ item }: { item?: Item }) {
         <button
           type="submit"
           disabled={submitting}
-          className="inline-flex items-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center rounded-md bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {submitting ? "Saving…" : isEdit ? "Save changes" : "Create item"}
         </button>
 
         <Link
           href={isEdit ? `/items/${item!.id}` : "/"}
-          className="rounded-md px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
+          className="rounded-md px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
         >
           Cancel
         </Link>

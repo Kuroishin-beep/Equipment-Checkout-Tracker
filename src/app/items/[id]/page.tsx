@@ -57,7 +57,7 @@ export default async function ItemDetailPage(props: PageProps<"/items/[id]">) {
     <div className="mx-auto max-w-2xl">
       <Link
         href="/"
-        className="inline-flex items-center rounded text-sm font-medium text-slate-600 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
+        className="inline-flex items-center rounded text-sm font-medium text-slate-600 transition-colors hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
       >
         ← Back to dashboard
       </Link>
@@ -100,7 +100,7 @@ export default async function ItemDetailPage(props: PageProps<"/items/[id]">) {
         <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 bg-slate-50 p-5 sm:p-6">
           <Link
             href={`/items/${item.id}/edit`}
-            className="inline-flex items-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2"
+            className="inline-flex items-center rounded-md bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2"
           >
             Edit
           </Link>

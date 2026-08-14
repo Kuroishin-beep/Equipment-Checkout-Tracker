@@ -12,11 +12,17 @@ const STYLES: Record<Status, string> = {
   "Retired": "bg-slate-100 text-slate-600 ring-slate-500/20",
 };
 
+const DOTS: Record<Status, string> = {
+  "Available": "bg-green-500",
+  "Checked Out": "bg-blue-500",
+  "Under Repair": "bg-amber-500",
+  "Retired": "bg-slate-400",
+};
 export default function StatusBadge({ status }: { status: Status }) {
   return (
     <span
-      className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${STYLES[status]}`}
-    >
+      className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium ring-1 ring-inset ${STYLES[status]}`}>
+    <span className={`h-1.5 w-1.5 rounded-full ${DOTS[status]}`} aria-hidden="true" />
       {status}
     </span>
   );
