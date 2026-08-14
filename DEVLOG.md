@@ -185,6 +185,108 @@ for.
 
 ---
 
+## 2026-08-14 — Phase 2 · Database, schema, seed
+
+**Goal:** A real Postgres database with a validated `items` table and five sample rows, plus
+the `DATABASE_URL` wiring in both places it is needed — local and Vercel. No application code;
+nothing reads the database until Phase 3.
+
+**Tool:** Claude Code (Opus 5), for the schema design and the reasoning behind each column type.
+I created every file and ran every statement myself.
+
+**Prompts I gave,** in order — the sequence matters more than any single one:
+> let's do phase 2
+>
+> no i should do all of it by me
+>
+> how do i populate the schema.sql
+>
+> give em the full schmea and how to do it step by step first
+>
+> what am i inputting insed .env.example and .env.local
+
+**What happened — the process correction is the story of this phase.** The first response wrote
+`db/schema.sql`, `db/seed.sql` and `.env.example` directly into the repo. I stopped it: for an
+exam whose bar is "explain every line", files I did not author are files I cannot defend. It
+reverted all three (`git checkout` on the tracked one, delete on the untracked two) and switched
+to teaching the SQL patterns against a throwaway `books` table instead, so I had to map the
+constructs onto `items` myself rather than paste.
+
+I then asked for the full schema explicitly, having already worked through the shape. That is a
+different thing from having it written for me unasked, and the distinction is one I want on the
+record: **I decided when to look at the answer.**
+
+**What I did by hand:**
+
+- Created `db/` and both `.sql` files
+- Worked through `CREATE TABLE` syntax from the pattern examples before asking for the full version
+- Ran `db/schema.sql` in the Neon SQL Editor, then verified against `information_schema.columns`
+- Deliberately ran an `INSERT` with status `'Borrowed'` to watch the `CHECK` constraint reject it
+- Ran `db/seed.sql`, confirmed the trailing `SELECT` returned 5 rows
+- **Trimmed `.env.example` down to one line.** The suggested version was a ~25-line comment block
+  explaining pooling. I kept the variable and the placeholder and cut the essay — the reasoning
+  already lives in `PLAN.md` §6, and duplicating it into a config template just means two places
+  to keep in sync. Final file is 109 bytes.
+- Created `.env.local`, pasted the real pooled connection string, verified it is gitignored
+
+**Bugs I hit:**
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+|         |       |     |
+
+**Verification I actually ran** (not "it looked right"):
+
+| Check | Expected | Result |
+|-------|----------|--------|
+| `information_schema.columns` for `items` | 9 columns, `notes` the only nullable | |
+| `INSERT` with status `'Borrowed'` | rejected by CHECK constraint | |
+| `SELECT count(*) FROM items` after seed | 5 | |
+| `git check-ignore -v .env.local` | `.gitignore:34:.env*` | confirmed |
+| `.env.example` scanned for real credentials | 0 matches | confirmed |
+
+**What I can now explain in the walkthrough:**
+
+- **Why `DATE` and not `TIMESTAMPTZ`.** A checkout date has no time component. As a timestamp it
+  goes through timezone conversion, and a value near midnight renders as the previous day for a
+  user in another timezone. `DATE` carries no timezone, so it cannot drift.
+- **Why `NOT NULL` is not enough.** `NOT NULL` accepts `"   "` as a valid string. The
+  `CHECK (length(trim(item_name)) > 0)` is what actually rejects it. I proved this by running the
+  bad insert rather than assuming.
+- **Why `TEXT` + `CHECK` and not a native `ENUM`.** Both reject invalid values. A `CHECK` is one
+  `ALTER TABLE` to change; adding or reordering `ENUM` values is markedly more painful. Four
+  statuses could plausibly become five.
+- **Why the connection string needs `-pooler`.** Vercel runs the app as serverless functions that
+  can scale to many concurrent instances. The pooled endpoint puts PgBouncer in front of Postgres
+  so short-lived connections do not exhaust the connection limit. The direct endpoint works
+  perfectly on localhost and then fails under load in production — the same class of trap as
+  in-memory storage.
+- **Why `.env.example` is committed and `.env.local` is not.** Same variable name, different
+  values: the template documents *which* variables exist so a fresh clone does not crash with a
+  cryptic error; the local file holds the actual secret and is matched by `.env*` in `.gitignore`.
+- **Why Neon and Vercel are both set to Singapore.** The latency that matters is *function to
+  database*, not browser to database. Vercel defaults to Washington DC; leaving that with Neon in
+  Singapore sends every query across the Pacific and back.
+
+**Two constraints deliberately duplicated:** `status` and `condition` are validated in the
+database via `CHECK`, and will be validated again by Zod in Phase 3. That is intentional, not
+redundant — the Zod schema gives the user a readable inline error, and the database constraint is
+the backstop that holds even if someone bypasses the app and writes SQL directly.
+
+**Carried in from Phase 1 and resolved:** the `.gitignore` line-34 `.env*` note. `.env.example`
+was force-added with `git add -f` while empty in commit `6bf0066`; because it is now tracked, the
+ignore rule no longer applies to it and this phase's edit staged normally.
+
+**Still open at the end of this phase:**
+- The commit is not yet pushed (`main` is ahead of `origin/main` by 1)
+- `DATABASE_URL` still needs adding to Vercel for all three environments
+- Vercel function region still needs setting to `sin1`
+- `README.md` remains the stock `create-next-app` text — Phase 13
+
+**Commit:** `feat: add postgres schema and seed data` (`1270fc9`) — 3 files, 95 insertions
+
+---
+
 <!-- ==========================================================================
      ENTRY TEMPLATE — copy the block below for each phase.
 
