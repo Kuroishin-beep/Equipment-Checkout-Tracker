@@ -816,6 +816,64 @@ be used by two different pages.
 
 ---
 
+## 2026-08-14 — Phase 9 · Item detail page
+
+**Goal:** `/items/[id]` showing every field, with proper 404 handling. The item-name links added
+to the dashboard back in Phase 6 finally resolve.
+
+**Tool:** Claude Code (Opus 5).
+
+**Prompt I gave:**
+> DEVLOG and then Phase 9
+
+**What I did by hand:** created `src/app/items/[id]/page.tsx` and `src/app/not-found.tsx`, then
+checked the 404 in the Network tab rather than trusting how it looked.
+
+**Bugs I hit:**
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+|         |       |     |
+
+**What I can now explain in the walkthrough:**
+
+- **Why `notFound()` and not a rendered "not found" message.** `notFound()` throws; Next catches
+  it, renders `not-found.tsx`, and sets the HTTP status to **404**. Returning `<p>Not found</p>`
+  from the component looks identical in the browser but sends **200 OK**, which tells crawlers and
+  monitoring that the page exists. The status code is part of the response, not decoration. I
+  verified the actual status in the Network tab on the document request.
+- **`notFound()` also does work for TypeScript.** Because it never returns, `item` narrows to
+  non-null on every line after it — no `!`, no cast. Calling it as a bare statement rather than
+  returning its result is what makes that narrowing happen.
+- **Why `cache()` from React is wrapped around `getItem`.** `generateMetadata` and the page
+  component both need the same record. Next dedupes `fetch()` automatically, but `getItem` is a
+  plain async function calling a SQL driver — Next has no way to know two calls are equivalent.
+  `cache()` makes it explicit, memoised for the lifetime of one request. Without it, every detail
+  page load runs the same query twice.
+- **Why the page calls `getItem()` directly instead of `fetch("/api/items/...")`.** This is the
+  read path from the Phase 3 design. The page already runs on the server; going out over HTTP to
+  reach a function in the same process is a network round trip for nothing. The API exists for the
+  *browser* to call, which is what the forms do.
+- **Why `not-found.tsx` lives at the app root.** Placed there it sits inside `layout.tsx`, so the
+  404 still has the nav and footer and the user is not stranded on a bare error page. Put it at
+  `src/app/items/[id]/not-found.tsx` and it only covers that one route.
+- **Why `whitespace-pre-wrap` on the notes.** HTML collapses every run of whitespace, newlines
+  included, into a single space. Without that class, multi-line notes render as one paragraph.
+
+**A deliberate omission:** the Delete button is not on this page yet, even though the exam lists
+Edit *and* Delete on the detail view. It needs a confirmation dialog and a `DELETE` fetch, which
+makes it a Client Component and a unit of work in its own right — Phase 11. I chose not to stub
+it, because a button that silently does nothing is worse than one that is honestly absent.
+
+**Still open:**
+- `DATABASE_URL` in Vercel for all three environments, and function region `sin1`
+- `**Live URL:**` in the Phase 1 entry remains an unfilled TODO
+- The Edit button 404s until Phase 10
+
+**Commit:** `feat: add item detail page` (`47059f1`) — 3 files, 213 insertions
+
+---
+
 <!-- ==========================================================================
      ENTRY TEMPLATE — copy the block below for each phase.
 
