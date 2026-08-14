@@ -651,6 +651,93 @@ quietly leaving the plan stale.
 
 ---
 
+## 2026-08-14 — Phase 7 · Status filter
+
+**Goal:** The last required dashboard feature — filter by status. Small on the surface, and the
+first place the URL becomes application state.
+
+**Tool:** Claude Code (Opus 5).
+
+**Prompt I gave:**
+> DEVLOG and then Phase 7
+
+**I deliberately departed from my own plan here.** `PLAN.md` §4 marks `FilterBar` as a Client
+Component using `useRouter` and `useSearchParams`. I built it as a **Server Component rendering
+four `<Link>` pills** instead, because a filter is just navigation, and navigation is links.
+
+| | `<select>` + `useRouter` | Pill links |
+|---|---|---|
+| `"use client"` | required | not needed |
+| JavaScript shipped | yes | **zero** |
+| Works with JS disabled | no | yes |
+| Back button / shareable URL | works | works, by construction |
+
+A `<select>` would earn its place if the filter had to combine with a live search box — that is
+the bonus feature, and `FilterBar` becomes a Client Component if I get to it. For four fixed
+statuses, links are strictly simpler. The dashboard is now complete and still ships no client
+JavaScript at all.
+
+**Verified rather than assumed, again:** before writing the page signature it read the *generated*
+route types at `.next/dev/types/routes.d.ts` rather than guessing at the helper's shape:
+
+```ts
+interface PageProps<AppRoute extends AppRoutes> {
+  params: Promise<ParamMap[AppRoute]>
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}
+```
+
+That confirmed `PageProps<"/">` exposes `searchParams` as a Promise of an index signature, so
+`searchParams.status` is `string | string[] | undefined` — which is why `parseStatus` handles the
+array case.
+
+**What I did by hand:** created `FilterBar.tsx`, rewrote `EmptyState.tsx` to cover two cases, and
+updated `page.tsx` to read and validate the query string.
+
+**Bugs I hit:**
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+|         |       |     |
+
+**What I can now explain in the walkthrough:**
+
+- **Why the filter lives in the URL rather than `useState`.** `/?status=Checked%20Out` can be
+  bookmarked and shared, and it survives a refresh and the back button. `useState` would lose it
+  on reload *and* force the item list to become a Client Component — which would mean shipping
+  every row to the browser and hiding some with CSS.
+- **Why filtering happens in SQL, not JavaScript.** `listItems({ status })` puts it in the `WHERE`
+  clause, so the database returns only matching rows. At five items that is irrelevant; at five
+  thousand it is the difference between a fast page and a broken one. Fetch-everything-then-filter
+  works right up until it doesn't.
+- **Why the query string is treated as hostile.** `parseStatus` checks the value against
+  `STATUSES` and falls back to `null`. It cannot reach SQL unvalidated anyway — `items.ts` uses a
+  parameterised query — so this is defence in depth. Its practical job is making `?status=nonsense`
+  show everything instead of nothing.
+- **Why `?status=A&status=B` needs handling.** A repeated query parameter arrives as an array, not
+  a string. `parseStatus` takes the first and ignores the rest rather than letting an array reach
+  a comparison expecting a string.
+- **Why "All" is the absence of the parameter, not `?status=All`.** It keeps the unfiltered
+  dashboard on a clean `/`, and means there is no magic string to special-case when parsing.
+- **Why there are two empty states.** "No results for this filter" and "nothing exists yet" look
+  identical but mean opposite things. Offering *Add Equipment* to someone who has five items and
+  just picked a filter matching none of them is misleading — what they want is *Clear filter*.
+- **Why `encodeURIComponent` is not optional.** Two of the four statuses contain a space, which
+  must become `%20` in a URL or the value never matches.
+
+**Milestone:** all required dashboard features are done — list, status badges, filter, empty
+state. Everything up to this point renders on the server with zero client JavaScript. Phase 8 is
+the first page that writes, and the first that genuinely needs `"use client"`.
+
+**Still open:**
+- `DATABASE_URL` in Vercel for all three environments, and function region `sin1`
+- `**Live URL:**` in the Phase 1 entry remains an unfilled TODO
+
+**Commit:** `feat: add status filter to dashboard` (`8cb562a`) — 4 files, 172 insertions,
+13 deletions
+
+---
+
 <!-- ==========================================================================
      ENTRY TEMPLATE — copy the block below for each phase.
 
