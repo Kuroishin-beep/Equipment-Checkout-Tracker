@@ -579,6 +579,78 @@ The link is correct; the destination does not exist yet.
 
 ---
 
+## 2026-08-14 — Phase 6 · Dashboard
+
+**Goal:** The first required feature — list all equipment with status badges and an empty state
+when there is no data. Replaces the throwaway JSON dump from Phase 3.
+
+**Tool:** Claude Code (Opus 5), full file contents with the reasoning inline.
+
+**Prompt I gave:**
+> DEVLOG and then phase 6
+
+**What I did by hand:** created `src/lib/format.ts` and four components under `src/components/`,
+rewrote `src/app/page.tsx`, then verified at both desktop and 375px.
+
+**The result I am most pleased with: this phase contains no `"use client"` at all.** Data
+fetching, table markup, badges and date formatting all run on the server and arrive as HTML. The
+browser downloads zero JavaScript to render the dashboard. I confirmed it with View Source rather
+than the DevTools inspector — the inspector shows the live DOM, which looks identical either way;
+View Source shows what the server actually sent, and the item names are in it.
+
+**Bugs I hit:**
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+|         |       |     |
+
+**Three traps that were designed around rather than discovered the hard way:**
+
+1. **Tailwind cannot see class names built at runtime.** It scans source files for complete
+   literal strings at build time, so `bg-${colour}-100` generates no CSS whatsoever and the badge
+   renders unstyled. Both badge components therefore hold a lookup object of whole class names.
+   This is the single most common Tailwind mistake and it fails silently — nothing errors, the
+   colour is just absent.
+2. **`toLocaleDateString()` without an explicit locale causes a hydration mismatch.** The page
+   renders on the server and hydrates on the client; if the two runtimes pick different locales
+   they produce different strings and React complains. `formatDate` hard-codes `"en-GB"`.
+3. **Formatting the date would have undone the `DATE` column decision.** `new Date("2026-07-28")`
+   parses as UTC midnight, so formatting it in a timezone behind UTC prints the 27th — the exact
+   off-by-one bug Phase 2 chose `DATE` to avoid, reintroduced at the very last step. `formatDate`
+   pins both the parse (`T00:00:00Z`) and the format (`timeZone: "UTC"`) to UTC.
+
+**What I can now explain in the walkthrough:**
+
+- **Why `Record<Status, string>` and not just an object.** It makes the map exhaustive: add a
+  fifth status to `types.ts` and the badge file stops compiling until that status gets a colour.
+  The type system enforces that the UI keeps up with the data model.
+- **Why the responsive strategy is two markup shapes rather than one that stretches.**
+  `hidden md:block` on the table and `md:hidden` on the card list render the same data twice and
+  let CSS choose. Five columns genuinely cannot work at 375px. Because the switch is pure CSS it
+  costs no JavaScript and no resize listener.
+- **Why `key={item.id}` and never the array index.** With an index key, deleting a row makes React
+  reuse the wrong DOM node for the row that shifts up into its place.
+- **Why `<dl>` for the mobile cards.** They are genuinely label/value pairs, not a list of items.
+  The markup describes the data rather than just the layout, and `scope="col"` on the table
+  headers does the same job for the desktop view.
+- **Why an empty state is worth a component.** A blank page reads as broken; "No equipment yet"
+  with a link to the create form reads as working-but-empty, and points at the next action.
+
+**A deviation from the plan:** `src/lib/format.ts` is not in the `PLAN.md` §4 file map. It was
+added because the date formatting needed a home and inlining it in `ItemTable` would have meant
+duplicating it on the detail page in Phase 9. Small, justified, and worth noting rather than
+quietly leaving the plan stale.
+
+**Known and intentional:** item name links 404. `/items/[id]` is not built until Phase 9.
+
+**Still open:**
+- `DATABASE_URL` in Vercel for all three environments, and function region `sin1`
+- `**Live URL:**` in the Phase 1 entry remains an unfilled TODO
+
+**Commit:** `feat: add dashboard with equipment list` (`21315be`) — 7 files, 284 insertions
+
+---
+
 <!-- ==========================================================================
      ENTRY TEMPLATE — copy the block below for each phase.
 
