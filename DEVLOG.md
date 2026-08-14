@@ -384,6 +384,116 @@ broader than its message suggests.
 
 ---
 
+## 2026-08-14 — Phase 4 · REST API route handlers
+
+**Goal:** Five endpoints over the data layer, using the correct HTTP verb and status code for
+each — the exam's "proper HTTP methods" requirement — and testable with `curl` before a single
+pixel of UI exists.
+
+**Tool:** Claude Code (Opus 5), full file contents plus the reasoning behind each status code.
+
+**Prompts I gave:**
+> DEVLOG and then phase 4
+>
+> how do i do step 2
+
+**Why Route Handlers and not Server Actions.** The exam allows either. Server Actions are always
+an HTTP `POST` under the hood no matter what they do, so they cannot demonstrate `PUT` or
+`DELETE` — the requirement says "proper HTTP methods", and a Server Action only ever has one.
+Route Handlers make the verb explicit and give me an API I can exercise independently of the
+browser.
+
+**Three version-specific facts checked against the docs shipped in `node_modules/next/dist/docs/`
+rather than assumed:**
+
+- Dynamic params are a `Promise` in Next 15+ — `{ params }: { params: Promise<{ id: string }> }`,
+  and it must be awaited. Confirmed in the `route.md` API reference.
+- **"Route Handlers are not cached by default"** in Next 16. In Next 14, `GET` handlers *were*
+  cached by default and this would have needed `export const dynamic = "force-dynamic"`. It does
+  not, and adding it would be cargo-culting from an older version.
+- `OPTIONS` is auto-implemented with a correct `Allow` header if I do not define it, and any verb
+  I do not export returns `405 Method Not Allowed` for free.
+
+**What I did by hand:**
+
+- Created `src/app/api/items/route.ts` (collection: `GET`, `POST`) and
+  `src/app/api/items/[id]/route.ts` (single resource: `GET`, `PUT`, `DELETE`)
+- Created the `[id]` directory — square brackets are literal characters on disk, not placeholder
+  notation
+- Ran the full `curl` suite below against a live dev server
+
+**Bugs I hit:**
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Endpoint served `/items` instead of `/api/items` | I created the collection route at `src/app/items/route.ts`, omitting the `api` path segment | `mkdir -p "src/app/api/items/[id]"`, moved the file, removed the empty folder |
+
+**A pattern I need to watch.** That is the second missing-path-segment mistake in two phases —
+`src/app/lib` instead of `src/lib` in Phase 3, `src/app/items` instead of `src/app/api/items`
+here. In the App Router the folder path *is* the URL, so a wrong segment is never a cosmetic
+problem. This one was worse than the Phase 3 version: `src/app/items/` is where the UI pages go
+in Phases 8–9, and Next.js does not allow `route.ts` and `page.tsx` in the same folder, so
+leaving it there would have blocked the item pages later. From here I check the full path against
+`PLAN.md` §4 before creating a file, not after the import fails.
+
+**Verification I ran:**
+
+| Request | Expected | Result |
+|---------|----------|--------|
+| `GET /api/items` | `200`, 5 items | |
+| `GET /api/items?status=Available` | `200`, 2 items | |
+| `GET /api/items?status=Banana` | `400` | |
+| `POST` valid body | `201` + `Location` header | |
+| `POST` invalid body | `400` with per-field `fieldErrors` | |
+| `POST` malformed JSON | `400` "must be valid JSON" | |
+| `GET /api/items/banana` | `404`, **not** `500` | |
+| `GET` valid-but-absent UUID | `404` | |
+| `PATCH /api/items/<id>` | `405` + `Allow` header | |
+| `PUT /api/items/<id>` | `200` + updated item | |
+| `DELETE /api/items/<id>` | `204`, no body | |
+| Same `DELETE` again | `404` | |
+
+**What I can now explain in the walkthrough:**
+
+- **Safe vs idempotent.** *Safe* means no server state changes — only `GET`. That is why Delete
+  is a `<button>` firing a `fetch` and never an `<a href>`: browsers and link prefetchers follow
+  links speculatively, so a destructive `GET` eventually deletes rows nobody clicked.
+  *Idempotent* means running it five times leaves the same result as running it once — `GET`,
+  `PUT` and `DELETE` are, `POST` is not. Two POSTs create two items, which is exactly why the
+  create form disables its submit button while a request is in flight.
+- **`PUT` not `PATCH`.** The edit form submits every field on every save, so the request genuinely
+  is a full replacement. `PATCH` would be correct for a partial change like a status-only
+  dropdown — that is a bonus, not this.
+- **Why `204` on delete.** The row is gone; there is nothing meaningful to return. A body on a
+  `204` is invalid HTTP, which is why that one response uses `new NextResponse(null, ...)` rather
+  than `NextResponse.json()`.
+- **Why the second `DELETE` returns `404`.** It proves the first one actually removed something,
+  and that the handler can tell "gone" from "never existed". That distinction is the entire reason
+  `deleteItem()` returns a boolean instead of `void`.
+- **Why `400` is split in two.** Malformed JSON and failed validation are different failures with
+  different messages. Both are the client's fault; neither is a `500`.
+- **Why `500` responses say nothing useful.** The real error goes to `console.error` server-side.
+  Database errors can leak schema details, so they never cross the wire.
+- **Why validation runs again on the server.** The form validates too, but `/api/items` is a
+  public URL — anyone can `curl` it. Client-side validation is a convenience for honest users,
+  never a security control. The browser is not a trust boundary.
+- **Why `getItem` returning `null` for a malformed id matters.** Without the UUID guard in
+  `items.ts`, Postgres raises `invalid input syntax for type uuid` and `/api/items/banana` becomes
+  a `500` where `404` is correct.
+
+**Housekeeping note:** as in Phase 3, this commit swept in the previous phase's DEVLOG entry
+rather than giving it its own `docs:` commit. The message understates the contents slightly.
+
+**Still open:**
+- `DATABASE_URL` in Vercel for all three environments, and function region `sin1`
+- `**Live URL:**` in the Phase 1 entry remains an unfilled TODO
+- `src/app/page.tsx` is still the throwaway JSON dump — Phase 6 replaces it
+
+**Commit:** `feat: add rest api route handlers for items` (`906352c`) — 3 files, 260 insertions.
+All work through Phase 4 is pushed; `main` and `origin/main` are level.
+
+---
+
 <!-- ==========================================================================
      ENTRY TEMPLATE — copy the block below for each phase.
 
