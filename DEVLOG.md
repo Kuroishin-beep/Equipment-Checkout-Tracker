@@ -738,6 +738,84 @@ the first page that writes, and the first that genuinely needs `"use client"`.
 
 ---
 
+## 2026-08-14 — Phase 8 · Create form
+
+**Goal:** `/items/new` — a validated form with a date picker that redirects on success. The first
+page in the app that writes, and the first component that genuinely needs `"use client"`.
+
+**Tool:** Claude Code (Opus 5).
+
+**Prompt I gave:**
+> DEVLOG and then phase 8
+
+**A structural decision made now to pay off in Phase 10:** `ItemForm` takes an optional `item`
+prop. Its presence switches the component between create and edit — `POST /api/items` versus
+`PUT /api/items/{id}`, "Create item" versus "Save changes", cancel-to-dashboard versus
+cancel-to-detail. Phase 10 is then a pre-filled instance of the same component rather than a
+second 278-line file that drifts out of sync with this one.
+
+**What I did by hand:** created `src/components/ItemForm.tsx` and `src/app/items/new/page.tsx`,
+then tested the form both through the browser and by bypassing it with `curl`.
+
+**Bugs I hit:**
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+|         |       |     |
+
+**What I can now explain in the walkthrough:**
+
+- **Why this component earns `"use client"` and `FilterBar` did not.** Four independent reasons
+  here: `useState` for the values, `onSubmit` for the handler, `fetch` for the request,
+  `useRouter` for the redirect. `FilterBar` looked interactive but was only links, so it stayed on
+  the server. The directive is not about whether something feels interactive — it is about whether
+  the code needs a client runtime.
+- **The HTTP reason the form must be a Client Component.** An HTML `<form>` can only send `GET` or
+  `POST`; `PUT` is not available to it. Using the correct verb for an edit therefore requires
+  `fetch`, and calling `fetch` from an event handler requires a client runtime. The HTTP
+  requirement and the `"use client"` requirement are the same decision, not two.
+- **Why validation runs in two places and why that is not duplication.** The same
+  `itemInputSchema` runs in the browser for instant feedback and again in the route handler
+  because `/api/items` is a public URL. Both failures produce `{ field: [messages] }`, so they
+  render through identical markup — one error path, not a client one and a server one. I proved
+  the server half by `curl`-ing invalid data straight past the form and still getting a `400`.
+- **Why `noValidate` is on the `<form>`.** Without it the browser shows its own validation bubbles
+  for some fields while Zod renders inline messages for others — two different UIs for the same
+  problem. Turning the native one off means validation has exactly one owner.
+- **Why the submit button never re-enables on success.** `POST` is not idempotent: two clicks
+  create two items. It stays disabled through the navigation, because re-enabling during the
+  transition reopens precisely that window. On failure it does re-enable, because the user needs
+  to be able to retry.
+- **Why `router.push()` is followed by `router.refresh()`.** The push navigates; the refresh
+  re-runs the Server Components so the dashboard renders with the new row. `revalidatePath` in the
+  route handler marked the cache stale, but something still has to ask for a fresh render.
+- **Why `<input type="date">` and no date-picker library.** It *is* the date picker, natively. It
+  reads and writes `YYYY-MM-DD` strings — exactly the format the `DATE` column, `to_char`, the
+  `Item` type and the Zod schema all use. The value crosses the entire stack without a single
+  conversion, which is the whole reason that format was chosen in Phase 2.
+- **Why `values.notes ?? ""` on the textarea.** `notes` is optional in the schema, so it can be
+  `undefined` — and a controlled input that receives `undefined` makes React switch it to
+  uncontrolled and warn.
+- **Why the checkout date does not default to today.** Computing "today" in component state would
+  run during server render and again on the client; in different timezones those produce different
+  dates and React reports a hydration mismatch. The field is required, so the user picks it.
+
+**Accessibility work that is easy to skip and I did not:** every input has a `<label htmlFor>`,
+errors are wired to their field with `aria-invalid` and `aria-describedby`, and the form-level
+error banner uses `role="alert"` so it is announced when it appears. A red border communicates
+nothing to a screen reader on its own.
+
+**Still open:**
+- `DATABASE_URL` in Vercel for all three environments, and function region `sin1`
+- `**Live URL:**` in the Phase 1 entry remains an unfilled TODO
+- Item name links on the dashboard still 404 — `/items/[id]` arrives in Phase 9
+
+**Commit:** `feat: add create item form with validation` (`a5dbc1b`) — 3 files, 392 insertions.
+`ItemForm.tsx` at 278 lines is the largest component in the project, and the only one that will
+be used by two different pages.
+
+---
+
 <!-- ==========================================================================
      ENTRY TEMPLATE — copy the block below for each phase.
 
