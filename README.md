@@ -19,7 +19,7 @@ A dashboard for managing company equipment loans. Built for the CRUD.IT Solution
 - Works on mobile, checked at 375px
 - Consistent navigation on every page, including the 404
 
-Search, filter and sort all live in the URL, so they compose — searching while filtered
+Search, filter and sort all live in the URL, so they compose, searching while filtered
 keeps the filter, and the result is a link you can share.
 
 ## Tech stack
